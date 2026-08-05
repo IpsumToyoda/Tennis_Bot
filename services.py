@@ -1,5 +1,4 @@
 import re
-import sqlite3
 from typing import List, Tuple, Dict, Any
 
 from db import execute, fetchone, get_connection, get_player_by_name, utc_now
