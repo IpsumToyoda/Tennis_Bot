@@ -22,7 +22,8 @@ def main() -> None:
     if not BOT_TOKEN:
         raise RuntimeError("Укажите BOT_TOKEN в .env или переменной окружения")
 
-    init_db(DB_PATH)
+    # Initialize DB: omit explicit DB_PATH so init_db() will prefer DATABASE_URL when present
+    init_db()
     application = Application.builder().token(BOT_TOKEN).build()
 
     for handler in build_handlers():
