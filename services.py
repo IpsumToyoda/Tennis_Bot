@@ -1,6 +1,6 @@
 import re
 import sqlite3
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 from db import execute, fetchone, get_connection, get_player_by_name, utc_now
 
@@ -105,7 +105,7 @@ def add_match_result(winner_name: str, loser_name: str, score_text: str, reporte
     return f"{winner_name} победил {loser_name} со счётом {score_text}"
 
 
-def get_standings(db_path: str = "tournament.db") -> List[sqlite3.Row]:
+def get_standings(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
     rows = connection.execute(
         """
@@ -118,7 +118,7 @@ def get_standings(db_path: str = "tournament.db") -> List[sqlite3.Row]:
     return rows
 
 
-def get_player_stats(db_path: str = "tournament.db") -> List[sqlite3.Row]:
+def get_player_stats(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
     rows = connection.execute(
         """
