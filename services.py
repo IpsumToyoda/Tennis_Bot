@@ -104,6 +104,36 @@ def add_match_result(winner_name: str, loser_name: str, score_text: str, reporte
     return f"{winner_name} победил {loser_name} со счётом {score_text}"
 
 
+def start_tournament(db_path: str = "tournament.db") -> str:
+    connection = get_connection(db_path)
+    player_count = connection.execute("SELECT COUNT(*) AS count FROM players").fetchone()["count"]
+    if player_count < 2:
+        connection.close()
+        raise ValueError("Для старта турнира нужно минимум 2 игрока")
+
+    current_status = get_tournament_status(db_path)
+    if current_status == "active":
+        connection.close()
+        return "Турнир уже активен"
+
+    connection.execute(
+        "UPDATE tournament_state SET status = ?, started_at = ? WHERE id = 1",
+        ("active", utc_now()),
+    )
+    connection.commit()
+    connection.close()
+    return "Турнир начат. Можно вводить результаты матчей."
+
+
+def get_tournament_status(db_path: str = "tournament.db") -> str:
+    connection = get_connection(db_path)
+    row = connection.execute("SELECT status FROM tournament_state WHERE id = 1").fetchone()
+    connection.close()
+    if not row:
+        return "inactive"
+    return row["status"]
+
+
 def get_standings(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
     rows = connection.execute(

@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from db import init_db
-from services import add_match_result, get_standings, parse_score
+from services import add_match_result, get_standings, get_tournament_status, parse_score, start_tournament
 
 
 class ServicesTests(unittest.TestCase):
@@ -47,6 +47,14 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(bob["losses"], 1)
         self.assertEqual(bob["sets_won"], 0)
         self.assertEqual(bob["sets_lost"], 2)
+
+    def test_start_tournament_marks_active_status(self) -> None:
+        add_match_result("Alice", "Bob", "6:3", "Judge", self.db_path)
+
+        result = start_tournament(self.db_path)
+
+        self.assertIn("Турнир начат", result)
+        self.assertEqual(get_tournament_status(self.db_path), "active")
 
 
 if __name__ == "__main__":

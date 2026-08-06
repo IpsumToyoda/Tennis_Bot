@@ -79,6 +79,20 @@ def init_db(db_path: Optional[str] = None) -> None:
         )
         """,
     )
+    execute(
+        connection,
+        f"""
+        CREATE TABLE IF NOT EXISTS tournament_state (
+            id {players_pk},
+            status TEXT NOT NULL DEFAULT 'inactive',
+            started_at TEXT
+        )
+        """,
+    )
+    execute(
+        connection,
+        "INSERT OR IGNORE INTO tournament_state (id, status) VALUES (1, 'inactive')",
+    )
     connection.commit()
     connection.close()
 

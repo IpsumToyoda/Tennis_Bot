@@ -17,6 +17,7 @@ class InlineKeyboardTests(unittest.TestCase):
         self.assertIn("Игроки", labels)
         self.assertIn("Таблица", labels)
         self.assertIn("Статистика", labels)
+        self.assertIn("Начать турнир", labels)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from services import (
     get_player_names,
     get_player_stats,
     normalize_name,
+    start_tournament,
 )
 
 REGISTER_NAME, RESULT_WINNER, RESULT_LOSER, RESULT_SCORE = range(4)
@@ -31,7 +32,10 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("Таблица", callback_data="table"),
             InlineKeyboardButton("Статистика", callback_data="stats"),
         ],
-        [InlineKeyboardButton("Результат матча", callback_data="result")],
+        [
+            InlineKeyboardButton("Начать турнир", callback_data="start_tournament"),
+            InlineKeyboardButton("Результат матча", callback_data="result"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -285,8 +289,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await show_table(update, context)
     elif action == "stats":
         await show_stats(update, context)
+    elif action == "start_tournament":
+        try:
+            message = start_tournament()
+        except ValueError as error:
+            await query.edit_message_text(str(error), reply_markup=build_main_menu_keyboard())
+            return
+        await query.edit_message_text(message, reply_markup=build_main_menu_keyboard())
     else:
         await query.edit_message_text("Неизвестное действие")
+
+
+async def start_tournament_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        message = start_tournament()
+    except ValueError as error:
+        await update.message.reply_text(str(error), reply_markup=build_main_menu_keyboard())
+        return
+
+    await update.message.reply_text(message, reply_markup=build_main_menu_keyboard())
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -295,6 +316,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "• /start — приветствие\n"
         "• /register_player Имя — добавить игрока\n"
         "• /players — список игроков\n"
+        "• /start_tournament — начать турнир\n"
         "• /result Победитель Проигравший 6:3 7:5 — результат матча\n"
         "• /table — турнирная таблица\n"
         "• /stats — статистика игроков"
@@ -333,10 +355,11 @@ def build_handlers() -> list:
         CommandHandler("register_player", register_player),
         CommandHandler("register", register_player),
         CommandHandler("players", show_players),
+        CommandHandler("start_tournament", start_tournament_command),
         CommandHandler("result", report_result),
         CommandHandler("table", show_table),
         CommandHandler("stats", show_stats),
         CommandHandler("help", help_command),
         conversation_handler,
-        CallbackQueryHandler(handle_callback, pattern="^(players|table|stats)$"),
+        CallbackQueryHandler(handle_callback, pattern="^(players|table|stats|start_tournament)$"),
     ]
