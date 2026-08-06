@@ -329,6 +329,7 @@ def build_handlers() -> list:
             CallbackQueryHandler(start_registration, pattern="^register$"),
             CallbackQueryHandler(start_result_flow, pattern="^result$"),
         ],
+        per_message=False,
         states={
             REGISTER_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_registration)
@@ -361,5 +362,5 @@ def build_handlers() -> list:
         CommandHandler("stats", show_stats),
         CommandHandler("help", help_command),
         conversation_handler,
-        CallbackQueryHandler(handle_callback, pattern="^(players|table|stats|start_tournament)$"),
+        CallbackQueryHandler(handle_callback, pattern="^.*$"),
     ]

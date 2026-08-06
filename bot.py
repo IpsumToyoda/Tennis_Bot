@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.ext import Application
 
 from config import BOT_TOKEN, DB_PATH
@@ -25,6 +25,19 @@ def main() -> None:
     # Initialize DB: omit explicit DB_PATH so init_db() will prefer DATABASE_URL when present
     init_db()
     application = Application.builder().token(BOT_TOKEN).build()
+
+    application.bot.set_my_commands(
+        [
+            BotCommand("start", "Запустить бота"),
+            BotCommand("register_player", "Добавить игрока"),
+            BotCommand("players", "Показать список игроков"),
+            BotCommand("start_tournament", "Начать турнир"),
+            BotCommand("result", "Внести результат матча"),
+            BotCommand("table", "Показать таблицу"),
+            BotCommand("stats", "Показать статистику"),
+            BotCommand("help", "Показать подсказку"),
+        ]
+    )
 
     for handler in build_handlers():
         application.add_handler(handler)
