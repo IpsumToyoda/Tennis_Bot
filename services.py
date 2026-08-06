@@ -1,5 +1,5 @@
 import re
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 from db import execute, fetchone, get_connection, get_player_by_name, utc_now
 
@@ -45,7 +45,7 @@ def parse_score(score_text: str) -> List[Tuple[int, int]]:
     return parsed
 
 
-def add_match_result(winner_name: str, loser_name: str, score_text: str, reported_by: str, db_path: str = "tournament.db") -> str:
+def add_match_result(winner_name: str, loser_name: str, score_text: str, reported_by: str, db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
     winner_id = ensure_player(connection, winner_name)
     loser_id = ensure_player(connection, loser_name)
@@ -104,7 +104,7 @@ def add_match_result(winner_name: str, loser_name: str, score_text: str, reporte
     return f"{winner_name} победил {loser_name} со счётом {score_text}"
 
 
-def start_tournament(db_path: str = "tournament.db") -> str:
+def start_tournament(db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
     player_count = connection.execute("SELECT COUNT(*) AS count FROM players").fetchone()["count"]
     if player_count < 2:
@@ -125,7 +125,7 @@ def start_tournament(db_path: str = "tournament.db") -> str:
     return "Турнир начат. Можно вводить результаты матчей."
 
 
-def get_tournament_status(db_path: str = "tournament.db") -> str:
+def get_tournament_status(db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
     row = connection.execute("SELECT status FROM tournament_state WHERE id = 1").fetchone()
     connection.close()
@@ -134,7 +134,7 @@ def get_tournament_status(db_path: str = "tournament.db") -> str:
     return row["status"]
 
 
-def get_standings(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
+def get_standings(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
     rows = connection.execute(
         """
@@ -147,7 +147,7 @@ def get_standings(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
     return rows
 
 
-def get_player_stats(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
+def get_player_stats(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
     rows = connection.execute(
         """
@@ -160,7 +160,7 @@ def get_player_stats(db_path: str = "tournament.db") -> List[Dict[str, Any]]:
     return rows
 
 
-def get_player_names(db_path: str = "tournament.db") -> List[str]:
+def get_player_names(db_path: Optional[str] = None) -> List[str]:
     connection = get_connection(db_path)
     rows = connection.execute(
         "SELECT name FROM players ORDER BY name ASC"
@@ -169,7 +169,7 @@ def get_player_names(db_path: str = "tournament.db") -> List[str]:
     return [row["name"] for row in rows]
 
 
-def format_table(db_path: str = "tournament.db") -> str:
+def format_table(db_path: Optional[str] = None) -> str:
     rows = get_standings(db_path)
     if not rows:
         return "Таблица пока пустая. Добавьте игроков командой /register_player"
