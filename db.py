@@ -89,10 +89,16 @@ def init_db(db_path: Optional[str] = None) -> None:
         )
         """,
     )
-    execute(
-        connection,
-        "INSERT OR IGNORE INTO tournament_state (id, status) VALUES (1, 'inactive')",
-    )
+    if _is_postgres(db_path):
+        execute(
+            connection,
+            "INSERT INTO tournament_state (id, status) VALUES (1, 'inactive') ON CONFLICT (id) DO NOTHING",
+        )
+    else:
+        execute(
+            connection,
+            "INSERT OR IGNORE INTO tournament_state (id, status) VALUES (1, 'inactive')",
+        )
     connection.commit()
     connection.close()
 
