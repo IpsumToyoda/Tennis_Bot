@@ -1,5 +1,7 @@
 import re
+import logging
 from typing import List, Tuple, Dict, Any, Optional
+from config import use_external_db
 
 from db import execute, fetchone, get_connection, get_player_by_name, utc_now
 
@@ -170,7 +172,9 @@ def get_player_names(db_path: Optional[str] = None) -> List[str]:
 
 
 def format_table(db_path: Optional[str] = None) -> str:
+    logging.info(f"format_table: use_external_db={use_external_db()} db_path={db_path}")
     rows = get_standings(db_path)
+    logging.info(f"format_table: rows={len(rows)}")
     if not rows:
         return "Таблица пока пустая. Добавьте игроков командой /register_player"
 
