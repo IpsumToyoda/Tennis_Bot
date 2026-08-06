@@ -163,11 +163,13 @@ def get_player_stats(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def get_player_names(db_path: Optional[str] = None) -> List[str]:
+    logging.info(f"get_player_names: use_external_db={use_external_db()} db_path={db_path}")
     connection = get_connection(db_path)
     rows = connection.execute(
         "SELECT name FROM players ORDER BY name ASC"
     ).fetchall()
     connection.close()
+    logging.info(f"get_player_names: found={len(rows)}")
     return [row["name"] for row in rows]
 
 
