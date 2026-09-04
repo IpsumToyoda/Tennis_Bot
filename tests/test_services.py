@@ -7,7 +7,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from db import get_connection, init_db
-from services import add_match_result, get_standings, get_tournament_status, parse_score, start_tournament
+from services import (
+    add_match_result,
+    delete_all_players,
+    finish_tournament,
+    get_standings,
+    get_tournament_status,
+    parse_score,
+    start_tournament,
+)
 
 
 class ServicesTests(unittest.TestCase):
@@ -76,6 +84,33 @@ class ServicesTests(unittest.TestCase):
         for score in ("1:6", "6:6", "6:3 garbage", "6:3 6:4 6:0"):
             with self.assertRaises(ValueError):
                 parse_score(score)
+
+    def test_finish_tournament_blocks_new_results(self) -> None:
+        from services import ensure_player
+
+        connection = get_connection(self.db_path)
+        ensure_player(connection, "Alice")
+        ensure_player(connection, "Bob")
+        connection.close()
+        start_tournament(self.db_path)
+
+        self.assertIn("завершен", finish_tournament(self.db_path))
+        with self.assertRaises(ValueError):
+            add_match_result("Alice", "Bob", "6:3", "Judge", self.db_path)
+
+    def test_delete_all_players_resets_tournament(self) -> None:
+        from services import ensure_player
+
+        connection = get_connection(self.db_path)
+        ensure_player(connection, "Alice")
+        ensure_player(connection, "Bob")
+        connection.close()
+        start_tournament(self.db_path)
+        add_match_result("Alice", "Bob", "6:3", "Judge", self.db_path)
+
+        self.assertIn("удалены", delete_all_players(self.db_path))
+        self.assertEqual(get_standings(self.db_path), [])
+        self.assertEqual(get_tournament_status(self.db_path), "inactive")
 
 
 if __name__ == "__main__":

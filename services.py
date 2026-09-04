@@ -116,6 +116,37 @@ def start_tournament(db_path: Optional[str] = None) -> str:
         connection.close()
 
 
+def finish_tournament(db_path: Optional[str] = None) -> str:
+    connection = get_connection(db_path)
+    try:
+        status = fetchone(connection, "SELECT status FROM tournament_state WHERE id = 1")
+        if not status or status["status"] != "active":
+            return "Турнир уже завершен"
+        execute(connection, "UPDATE tournament_state SET status = %s WHERE id = 1", ("inactive",))
+        connection.commit()
+        return "Турнир завершен. Новые результаты больше не принимаются."
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_all_players(db_path: Optional[str] = None) -> str:
+    connection = get_connection(db_path)
+    try:
+        execute(connection, "DELETE FROM matches")
+        execute(connection, "DELETE FROM players")
+        execute(connection, "UPDATE tournament_state SET status = %s, started_at = NULL WHERE id = 1", ("inactive",))
+        connection.commit()
+        return "Все участники и результаты удалены. Турнир сброшен."
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def get_tournament_status(db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
     row = fetchone(connection, "SELECT status FROM tournament_state WHERE id = 1")

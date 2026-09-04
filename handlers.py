@@ -18,6 +18,8 @@ from services import (
     get_player_names,
     get_player_stats,
     normalize_name,
+    delete_all_players,
+    finish_tournament,
     start_tournament,
 )
 
@@ -329,6 +331,26 @@ async def start_tournament_command(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text(message, reply_markup=build_main_menu_keyboard())
 
 
+async def finish_tournament_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_allowed_judge(update.effective_user.id):
+        await update.message.reply_text("Только судьи могут завершать турнир.")
+        return
+    await update.message.reply_text(finish_tournament(), reply_markup=build_main_menu_keyboard())
+
+
+async def delete_all_players_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_allowed_judge(update.effective_user.id):
+        await update.message.reply_text("Только судьи могут удалять участников.")
+        return
+    if context.args != ["CONFIRM"]:
+        await update.message.reply_text(
+            "Команда удалит всех участников, матчи и статистику без восстановления.\n"
+            "Для подтверждения отправьте: /delete_all_players CONFIRM"
+        )
+        return
+    await update.message.reply_text(delete_all_players(), reply_markup=build_main_menu_keyboard())
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Команды:\n"
@@ -336,6 +358,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "• /register_player Имя — добавить игрока\n"
         "• /players — список игроков\n"
         "• /start_tournament — начать турнир\n"
+        "• /finish_tournament — завершить турнир\n"
+        "• /delete_all_players CONFIRM — удалить всех участников и результаты\n"
         "• /result Победитель Проигравший 6:3 7:5 — результат матча\n"
         "• /table — турнирная таблица\n"
         "• /stats — статистика игроков"
@@ -376,6 +400,8 @@ def build_handlers() -> list:
         CommandHandler("register", register_player),
         CommandHandler("players", show_players),
         CommandHandler("start_tournament", start_tournament_command),
+        CommandHandler("finish_tournament", finish_tournament_command),
+        CommandHandler("delete_all_players", delete_all_players_command),
         CommandHandler("result", report_result),
         CommandHandler("table", show_table),
         CommandHandler("stats", show_stats),
