@@ -1,9 +1,9 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Sequence
 
-import psycopg2
-import psycopg2.extras
+import psycopg
+from psycopg.rows import dict_row
 
 from config import DATABASE_URL, DB_PATH
 
@@ -26,7 +26,7 @@ def execute(connection, sql: str, params: Optional[Sequence] = None):
         cursor.execute(sql, params)
         return cursor
 
-    cursor = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = connection.cursor(row_factory=dict_row)
     cursor.execute(sql, params)
     return cursor
 
@@ -114,7 +114,7 @@ def get_connection(db_path: Optional[str] = None):
 
 
 def utc_now() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def get_player_by_name(connection, name: str) -> Optional[sqlite3.Row]:

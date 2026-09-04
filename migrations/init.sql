@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS matches (
   reported_by TEXT,
   reported_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS tournament_state (
+  id INTEGER PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'inactive',
+  started_at TIMESTAMPTZ
+);
+
+INSERT INTO tournament_state (id, status)
+VALUES (1, 'inactive')
+ON CONFLICT (id) DO NOTHING;

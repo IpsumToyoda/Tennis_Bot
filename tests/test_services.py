@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from db import init_db
+from db import get_connection, init_db
 from services import add_match_result, get_standings, get_tournament_status, parse_score, start_tournament
 
 
@@ -28,6 +28,13 @@ class ServicesTests(unittest.TestCase):
             parse_score("bad score")
 
     def test_add_match_result_updates_standings(self) -> None:
+        from services import ensure_player
+
+        connection = get_connection(self.db_path)
+        ensure_player(connection, "Alice")
+        ensure_player(connection, "Bob")
+        connection.close()
+        start_tournament(self.db_path)
         result = add_match_result("Alice", "Bob", "6:3 7:5", "Judge", self.db_path)
 
         self.assertIn("Alice победил Bob", result)
@@ -49,12 +56,26 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(bob["sets_lost"], 2)
 
     def test_start_tournament_marks_active_status(self) -> None:
-        add_match_result("Alice", "Bob", "6:3", "Judge", self.db_path)
+        from services import ensure_player
+
+        connection = get_connection(self.db_path)
+        ensure_player(connection, "Alice")
+        ensure_player(connection, "Bob")
+        connection.close()
 
         result = start_tournament(self.db_path)
 
         self.assertIn("Турнир начат", result)
         self.assertEqual(get_tournament_status(self.db_path), "active")
+
+    def test_result_requires_active_tournament(self) -> None:
+        with self.assertRaises(ValueError):
+            add_match_result("Alice", "Bob", "6:3", "Judge", self.db_path)
+
+    def test_parse_score_rejects_invalid_sets(self) -> None:
+        for score in ("1:6", "6:6", "6:3 garbage", "6:3 6:4 6:0"):
+            with self.assertRaises(ValueError):
+                parse_score(score)
 
 
 if __name__ == "__main__":

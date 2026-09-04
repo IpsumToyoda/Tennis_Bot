@@ -1,3 +1,5 @@
+import shlex
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -8,8 +10,8 @@ from telegram.ext import (
     filters,
 )
 
-from config import ALLOWED_JUDGES
-from db import get_connection
+from config import is_allowed_judge
+from db import fetchall, get_connection
 from services import (
     add_match_result,
     format_table,
@@ -82,7 +84,7 @@ async def register_player(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     connection = get_connection()
-    rows = connection.execute("SELECT name FROM players ORDER BY name ASC").fetchall()
+    rows = fetchall(connection, "SELECT name FROM players ORDER BY name ASC")
     connection.close()
 
     if not rows:
@@ -95,17 +97,21 @@ async def show_players(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def report_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    if ALLOWED_JUDGES and user_id not in ALLOWED_JUDGES:
+    if not is_allowed_judge(user_id):
         await update.message.reply_text("Только судьи могут добавлять результаты матча")
         return
 
-    if len(context.args) < 3:
-        await update.message.reply_text("Использование: /result Победитель Проигравший 6:3 7:5")
+    try:
+        arguments = shlex.split(update.message.text.partition(" ")[2])
+    except ValueError:
+        arguments = []
+    if len(arguments) < 3:
+        await update.message.reply_text('Использование: /result "Победитель" "Проигравший" 6:3 7:5')
         return
 
-    winner_name = normalize_name(context.args[0])
-    loser_name = normalize_name(context.args[1])
-    score_text = " ".join(context.args[2:])
+    winner_name = normalize_name(arguments[0])
+    loser_name = normalize_name(arguments[1])
+    score_text = " ".join(arguments[2:])
 
     try:
         result_text = add_match_result(winner_name, loser_name, score_text, update.effective_user.full_name)
@@ -171,6 +177,9 @@ async def start_result_flow(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     if query:
         await query.answer()
+        if not is_allowed_judge(update.effective_user.id):
+            await query.edit_message_text("Только судьи могут добавлять результаты матча.", reply_markup=build_main_menu_keyboard())
+            return ConversationHandler.END
         players = get_player_names()
         if len(players) < 2:
             await query.edit_message_text(
@@ -238,6 +247,10 @@ async def choose_loser(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def receive_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_allowed_judge(update.effective_user.id):
+        await update.message.reply_text("Только судьи могут добавлять результаты матча.")
+        return ConversationHandler.END
+
     text = update.message.text.strip()
     result_data = context.user_data.get("result", {})
     winner_name = result_data.get("winner")
@@ -290,6 +303,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif action == "stats":
         await show_stats(update, context)
     elif action == "start_tournament":
+        if not is_allowed_judge(update.effective_user.id):
+            await query.edit_message_text("Только судьи могут начинать турнир.", reply_markup=build_main_menu_keyboard())
+            return
         try:
             message = start_tournament()
         except ValueError as error:
@@ -301,6 +317,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def start_tournament_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_allowed_judge(update.effective_user.id):
+        await update.message.reply_text("Только судьи могут начинать турнир.")
+        return
     try:
         message = start_tournament()
     except ValueError as error:
@@ -335,10 +354,10 @@ def build_handlers() -> list:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_registration)
             ],
             RESULT_WINNER: [
-                CallbackQueryHandler(choose_winner, pattern="^[^cancel].*")
+                CallbackQueryHandler(choose_winner, pattern="^(?!cancel$).+")
             ],
             RESULT_LOSER: [
-                CallbackQueryHandler(choose_loser, pattern="^[^cancel].*")
+                CallbackQueryHandler(choose_loser, pattern="^(?!cancel$).+")
             ],
             RESULT_SCORE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_score)

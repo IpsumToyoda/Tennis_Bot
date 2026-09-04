@@ -3,7 +3,7 @@ import logging
 from typing import List, Tuple, Dict, Any, Optional
 from config import use_external_db
 
-from db import execute, fetchone, get_connection, get_player_by_name, utc_now
+from db import execute, fetchall, fetchone, get_connection, get_player_by_name, utc_now
 
 
 def normalize_name(name: str) -> str:
@@ -35,101 +35,90 @@ def ensure_player(connection, name: str) -> int:
 
 def parse_score(score_text: str) -> List[Tuple[int, int]]:
     score_text = score_text.strip()
-    pairs = re.findall(r"(\d+)\s*[:\-]\s*(\d+)", score_text)
-    if not pairs:
-        raise ValueError("Нужен формат счета, например 6:3 или 6-3 7-5")
+    parts = re.split(r"\s+", score_text)
+    if not 1 <= len(parts) <= 3:
+        raise ValueError("Укажите от 1 до 3 сетов, например 6:3 7:5")
 
-    parsed = [(int(first), int(second)) for first, second in pairs]
-    if not all(first >= 0 and second >= 0 for first, second in parsed):
-        raise ValueError("Счет должен содержать только положительные числа")
-    if any(first == 0 and second == 0 for first, second in parsed):
-        raise ValueError("Счет не может содержать нулевые значения")
+    parsed = []
+    for part in parts:
+        match = re.fullmatch(r"(\d+)\s*[:\-]\s*(\d+)", part)
+        if not match:
+            raise ValueError("Формат счета: 6:3 7:5")
+        first, second = (int(value) for value in match.groups())
+        if not ((first == 6 and 0 <= second <= 4) or
+                (first == 7 and second in (5, 6))):
+            raise ValueError("Допустимы сеты 6:0-6:4, 7:5 или 7:6")
+        parsed.append((first, second))
+
+    required_sets = len(parsed) // 2 + 1
+    if sum(first > second for first, second in parsed) != required_sets:
+        raise ValueError("Победитель должен выиграть большинство сетов")
     return parsed
 
 
 def add_match_result(winner_name: str, loser_name: str, score_text: str, reported_by: str, db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
-    winner_id = ensure_player(connection, winner_name)
-    loser_id = ensure_player(connection, loser_name)
+    try:
+        status = fetchone(connection, "SELECT status FROM tournament_state WHERE id = 1")
+        if not status or status["status"] != "active":
+            raise ValueError("Сначала начните турнир командой /start_tournament")
 
-    if winner_id == loser_id:
-        raise ValueError("Победитель и проигравший не могут быть одним и тем же игроком")
+        score_pairs = parse_score(score_text)
+        winner_id = ensure_player(connection, winner_name)
+        loser_id = ensure_player(connection, loser_name)
+        if winner_id == loser_id:
+            raise ValueError("Победитель и проигравший не могут быть одним и тем же игроком")
 
-    score_pairs = parse_score(score_text)
-    sets_won = 0
-    sets_lost = 0
-    games_won = 0
-    games_lost = 0
+        sets_won = sum(first > second for first, second in score_pairs)
+        sets_lost = len(score_pairs) - sets_won
+        games_won = sum(first for first, _ in score_pairs)
+        games_lost = sum(second for _, second in score_pairs)
 
-    for first, second in score_pairs:
-        if first > second:
-            sets_won += 1
-        else:
-            sets_lost += 1
-        games_won += first
-        games_lost += second
-
-    connection.execute(
-        """
-        UPDATE players
-        SET wins = wins + 1,
-            sets_won = sets_won + ?,
-            sets_lost = sets_lost + ?,
-            games_won = games_won + ?,
-            games_lost = games_lost + ?
-        WHERE id = ?
-        """,
-        (sets_won, sets_lost, games_won, games_lost, winner_id),
-    )
-    connection.execute(
-        """
-        UPDATE players
-        SET losses = losses + 1,
-            sets_won = sets_won + ?,
-            sets_lost = sets_lost + ?,
-            games_won = games_won + ?,
-            games_lost = games_lost + ?
-        WHERE id = ?
-        """,
-        (sets_lost, sets_won, games_lost, games_won, loser_id),
-    )
-    connection.execute(
-        """
-        INSERT INTO matches (winner_id, loser_id, score, reported_by, reported_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (winner_id, loser_id, score_text, reported_by, utc_now()),
-    )
-    connection.commit()
-    connection.close()
+        execute(connection, """
+            UPDATE players SET wins = wins + 1, sets_won = sets_won + %s,
+            sets_lost = sets_lost + %s, games_won = games_won + %s,
+            games_lost = games_lost + %s WHERE id = %s
+        """, (sets_won, sets_lost, games_won, games_lost, winner_id))
+        execute(connection, """
+            UPDATE players SET losses = losses + 1, sets_won = sets_won + %s,
+            sets_lost = sets_lost + %s, games_won = games_won + %s,
+            games_lost = games_lost + %s WHERE id = %s
+        """, (sets_lost, sets_won, games_lost, games_won, loser_id))
+        execute(connection, """
+            INSERT INTO matches (winner_id, loser_id, score, reported_by, reported_at)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (winner_id, loser_id, score_text, reported_by, utc_now()))
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
     return f"{winner_name} победил {loser_name} со счётом {score_text}"
 
 
 def start_tournament(db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
-    player_count = connection.execute("SELECT COUNT(*) AS count FROM players").fetchone()["count"]
-    if player_count < 2:
+    try:
+        player_count = fetchone(connection, "SELECT COUNT(*) AS count FROM players")["count"]
+        if player_count < 2:
+            raise ValueError("Для старта турнира нужно минимум 2 игрока")
+        if fetchone(connection, "SELECT status FROM tournament_state WHERE id = 1")["status"] == "active":
+            return "Турнир уже активен"
+        execute(connection, "UPDATE tournament_state SET status = %s, started_at = %s WHERE id = 1", ("active", utc_now()))
+        connection.commit()
+        return "Турнир начат. Можно вводить результаты матчей."
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
         connection.close()
-        raise ValueError("Для старта турнира нужно минимум 2 игрока")
-
-    current_status = get_tournament_status(db_path)
-    if current_status == "active":
-        connection.close()
-        return "Турнир уже активен"
-
-    connection.execute(
-        "UPDATE tournament_state SET status = ?, started_at = ? WHERE id = 1",
-        ("active", utc_now()),
-    )
-    connection.commit()
-    connection.close()
-    return "Турнир начат. Можно вводить результаты матчей."
 
 
 def get_tournament_status(db_path: Optional[str] = None) -> str:
     connection = get_connection(db_path)
-    row = connection.execute("SELECT status FROM tournament_state WHERE id = 1").fetchone()
+    row = fetchone(connection, "SELECT status FROM tournament_state WHERE id = 1")
     connection.close()
     if not row:
         return "inactive"
@@ -138,37 +127,36 @@ def get_tournament_status(db_path: Optional[str] = None) -> str:
 
 def get_standings(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
-    rows = connection.execute(
-        """
-        SELECT id, name, wins, losses, sets_won, sets_lost, games_won, games_lost
-        FROM players
-        ORDER BY wins DESC, losses ASC, (sets_won - sets_lost) DESC, (games_won - games_lost) DESC, name ASC
-        """
-    ).fetchall()
-    connection.close()
-    return rows
+    try:
+        return fetchall(connection, """
+            SELECT id, name, wins, losses, sets_won, sets_lost, games_won, games_lost
+            FROM players
+            ORDER BY wins DESC, losses ASC, (sets_won - sets_lost) DESC,
+            (games_won - games_lost) DESC, name ASC
+        """)
+    finally:
+        connection.close()
 
 
 def get_player_stats(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     connection = get_connection(db_path)
-    rows = connection.execute(
-        """
-        SELECT name, wins, losses, sets_won, sets_lost, games_won, games_lost
-        FROM players
-        ORDER BY wins DESC, losses ASC, name ASC
-        """
-    ).fetchall()
-    connection.close()
-    return rows
+    try:
+        return fetchall(connection, """
+            SELECT name, wins, losses, sets_won, sets_lost, games_won, games_lost
+            FROM players
+            ORDER BY wins DESC, losses ASC, name ASC
+        """)
+    finally:
+        connection.close()
 
 
 def get_player_names(db_path: Optional[str] = None) -> List[str]:
     logging.info(f"get_player_names: use_external_db={use_external_db()} db_path={db_path}")
     connection = get_connection(db_path)
-    rows = connection.execute(
-        "SELECT name FROM players ORDER BY name ASC"
-    ).fetchall()
-    connection.close()
+    try:
+        rows = fetchall(connection, "SELECT name FROM players ORDER BY name ASC")
+    finally:
+        connection.close()
     logging.info(f"get_player_names: found={len(rows)}")
     return [row["name"] for row in rows]
 

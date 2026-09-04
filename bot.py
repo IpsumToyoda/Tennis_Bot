@@ -1,6 +1,4 @@
-import asyncio
 import logging
-import sys
 
 from telegram import BotCommand, Update
 from telegram.ext import Application
@@ -15,18 +13,8 @@ logging.basicConfig(
 )
 
 
-def main() -> None:
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-    if not BOT_TOKEN:
-        raise RuntimeError("Укажите BOT_TOKEN в .env или переменной окружения")
-
-    # Initialize DB: omit explicit DB_PATH so init_db() will prefer DATABASE_URL when present
-    init_db()
-    application = Application.builder().token(BOT_TOKEN).build()
-
-    application.bot.set_my_commands(
+async def post_init(application: Application) -> None:
+    await application.bot.set_my_commands(
         [
             BotCommand("start", "Запустить бота"),
             BotCommand("register_player", "Добавить игрока"),
@@ -39,12 +27,19 @@ def main() -> None:
         ]
     )
 
+
+def main() -> None:
+    if not BOT_TOKEN:
+        raise RuntimeError("Укажите BOT_TOKEN в .env или переменной окружения")
+
+    # Initialize DB: omit explicit DB_PATH so init_db() will prefer DATABASE_URL when present
+    init_db()
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+
     for handler in build_handlers():
         application.add_handler(handler)
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(application.run_polling(allowed_updates=Update.ALL_TYPES))
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":

@@ -19,5 +19,9 @@ def get_allowed_judges() -> List[int]:
     return ALLOWED_JUDGES.copy()
 
 
+def is_allowed_judge(user_id: int) -> bool:
+    return bool(ALLOWED_JUDGES) and user_id in ALLOWED_JUDGES
+
+
 def use_external_db() -> bool:
     return bool(DATABASE_URL)
