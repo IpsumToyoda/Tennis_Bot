@@ -105,7 +105,7 @@ def init_db(db_path: Optional[str] = None) -> None:
 
 def get_connection(db_path: Optional[str] = None):
     if DATABASE_URL and not db_path:
-        return psycopg2.connect(DATABASE_URL)
+        return psycopg.connect(DATABASE_URL)
 
     target_path = db_path or DB_PATH
     connection = sqlite3.connect(target_path)
